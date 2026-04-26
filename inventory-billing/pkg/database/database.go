@@ -49,15 +49,27 @@ func Connect(cfg *config.Config) (*gorm.DB, error) {
 // references are always satisfied before the referencing table is created.
 func migrate(db *gorm.DB) error {
 	return db.AutoMigrate(
-		// independent tables first
+		// independent tables
 		&domain.User{},
+		&domain.Category{},  // must come before Product
 		&domain.Customer{},
 		&domain.Product{},
 		&domain.InvoiceCounter{},
+		&domain.CNCounter{},
+		&domain.Vendor{},
+		&domain.POCounter{},
+		&domain.Warehouse{},
+		&domain.AuditLog{},
 
 		// tables that reference the above
 		&domain.Invoice{},
 		&domain.InvoiceItem{},
 		&domain.StockLog{},
+		&domain.PurchaseOrder{},
+		&domain.POItem{},
+		&domain.Payment{},
+		&domain.WarehouseStock{},
+		&domain.CreditNote{},
+		&domain.CreditNoteItem{},
 	)
 }

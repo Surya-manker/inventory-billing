@@ -41,16 +41,16 @@ function InvoiceStatusBar({ pending, paid, canceled }) {
   const total = pending + paid + canceled
   if (total === 0) return <p className="text-sm text-gray-400 py-4 text-center">No invoices yet</p>
 
-  const paidPct     = Math.round((paid     / total) * 100)
-  const pendingPct  = Math.round((pending  / total) * 100)
+  const paidPct = Math.round((paid / total) * 100)
+  const pendingPct = Math.round((pending / total) * 100)
   const canceledPct = Math.round((canceled / total) * 100)
 
   return (
     <div className="space-y-3">
       {[
-        { label: 'Paid',     count: paid,     pct: paidPct,     bar: 'bg-green-500',  text: 'text-green-700',  bg: 'bg-green-50' },
-        { label: 'Pending',  count: pending,  pct: pendingPct,  bar: 'bg-yellow-400', text: 'text-yellow-700', bg: 'bg-yellow-50' },
-        { label: 'Canceled', count: canceled, pct: canceledPct, bar: 'bg-red-400',    text: 'text-red-700',    bg: 'bg-red-50' },
+        { label: 'Paid', count: paid, pct: paidPct, bar: 'bg-green-500', text: 'text-green-700', bg: 'bg-green-50' },
+        { label: 'Pending', count: pending, pct: pendingPct, bar: 'bg-yellow-400', text: 'text-yellow-700', bg: 'bg-yellow-50' },
+        { label: 'Canceled', count: canceled, pct: canceledPct, bar: 'bg-red-400', text: 'text-red-700', bg: 'bg-red-50' },
       ].map(({ label, count, pct, bar, text, bg }) => (
         <div key={label}>
           <div className="flex items-center justify-between mb-1">
@@ -140,7 +140,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-8 space-y-8 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
@@ -190,6 +190,7 @@ export default function Dashboard() {
           to="/customers"
           bg="bg-emerald-100"
           fg="text-emerald-600"
+          sub={stats?.totalCustomers === 0 ? 'No customers yet' : `${stats.totalCustomers} total`}
           icon={
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
@@ -239,9 +240,9 @@ export default function Dashboard() {
           />
           <div className="mt-5 pt-4 border-t border-gray-100 grid grid-cols-3 gap-2 text-center">
             {[
-              { label: 'Paid',     val: stats?.paidInvoices,     cls: 'text-green-600'  },
-              { label: 'Pending',  val: stats?.pendingInvoices,  cls: 'text-yellow-600' },
-              { label: 'Canceled', val: stats?.canceledInvoices, cls: 'text-red-500'    },
+              { label: 'Paid', val: stats?.paidInvoices, cls: 'text-green-600' },
+              { label: 'Pending', val: stats?.pendingInvoices, cls: 'text-yellow-600' },
+              { label: 'Canceled', val: stats?.canceledInvoices, cls: 'text-red-500' },
             ].map(({ label, val, cls }) => (
               <div key={label}>
                 <p className={`text-xl font-bold tabular-nums ${cls}`}>{val ?? 0}</p>

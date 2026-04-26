@@ -75,7 +75,7 @@ func (h *InvoiceHandler) Create(c *gin.Context) {
 		case errors.Is(err, domain.ErrDiscountExceedsSubtotal):
 			utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		default:
-			utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
+			utils.ErrorResponse(c, http.StatusInternalServerError, "could not create invoice")
 		}
 		return
 	}

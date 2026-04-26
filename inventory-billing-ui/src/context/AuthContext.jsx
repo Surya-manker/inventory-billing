@@ -47,8 +47,18 @@ export function AuthProvider({ children }) {
 
   const isAdmin = user?.role === 'admin'
 
+  // Call this after a successful profile PUT so the sidebar name updates
+  // without requiring a page refresh or re-login.
+  const updateUser = useCallback((patch) => {
+    setUser((prev) => {
+      const next = { ...prev, ...patch }
+      localStorage.setItem('user', JSON.stringify(next))
+      return next
+    })
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin, updateUser }}>
       {children}
     </AuthContext.Provider>
   )

@@ -151,8 +151,7 @@ func (s *authService) ChangePassword(ctx context.Context, userID uuid.UUID, oldP
 	if err != nil {
 		return err
 	}
-	user.Password = hashed
-	return s.userRepo.Update(ctx, user)
+	return s.userRepo.UpdatePassword(ctx, userID, hashed)
 }
 
 func (s *authService) issueTokenPair(ctx context.Context, user *domain.User) (*AuthTokens, error) {

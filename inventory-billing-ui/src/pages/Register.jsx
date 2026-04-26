@@ -8,7 +8,7 @@ export default function Register() {
   const navigate = useNavigate()
 
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '', role: 'admin' })
-  const [error, setError]   = useState('')
+  const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -29,10 +29,10 @@ export default function Register() {
     setLoading(true)
     try {
       await api.post('/auth/register', {
-        name:     form.name,
-        email:    form.email,
+        name: form.name,
+        email: form.email,
         password: form.password,
-        role:     form.role,
+        role: form.role,
       })
       setSuccess('Account created! Redirecting to login…')
       setTimeout(() => navigate('/login'), 1500)
@@ -125,11 +125,10 @@ export default function Register() {
                     key={val}
                     type="button"
                     onClick={() => setForm({ ...form, role: val })}
-                    className={`flex flex-col items-start p-3 rounded-lg border-2 text-left transition-colors ${
-                      form.role === val
+                    className={`flex flex-col items-start p-3 rounded-lg border-2 text-left transition-colors ${form.role === val
                         ? 'border-brand-500 bg-brand-50'
                         : 'border-gray-200 hover:border-gray-300'
-                    }`}
+                      }`}
                   >
                     <span className={`text-sm font-semibold ${form.role === val ? 'text-brand-700' : 'text-gray-700'}`}>
                       {label}
@@ -158,11 +157,10 @@ export default function Register() {
                   {[1, 2, 3, 4].map((i) => (
                     <div
                       key={i}
-                      className={`h-1 flex-1 rounded-full transition-colors ${
-                        passwordStrength(form.password) >= i
+                      className={`h-1 flex-1 rounded-full transition-colors ${passwordStrength(form.password) >= i
                           ? strengthColor(passwordStrength(form.password))
                           : 'bg-gray-200'
-                      }`}
+                        }`}
                     />
                   ))}
                 </div>
@@ -223,7 +221,7 @@ export default function Register() {
 
 function passwordStrength(pw) {
   let score = 0
-  if (pw.length >= 8)  score++
+  if (pw.length >= 8) score++
   if (pw.length >= 12) score++
   if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++
   if (/[0-9]/.test(pw) || /[^A-Za-z0-9]/.test(pw)) score++

@@ -1,6 +1,11 @@
 package config
 
-import "github.com/spf13/viper"
+import (
+	"errors"
+	"strings"
+
+	"github.com/spf13/viper"
+)
 
 type Config struct {
 	Server   ServerConfig
@@ -41,6 +46,26 @@ type GSTConfig struct {
 	StateCode     string // first 2 digits of GSTIN, used for intra/inter-state detection
 }
 
+// validate checks that all required fields are non-empty.
+// Called right after the config is assembled so the process fails fast with a
+// clear message instead of panicking later with a cryptic "token is empty" error.
+func (c *Config) validate() error {
+	var errs []string
+	if c.Database.DSN == "" {
+		errs = append(errs, "DATABASE_DSN is required")
+	}
+	if c.JWT.Secret == "" {
+		errs = append(errs, "JWT_SECRET is required")
+	}
+	if c.Redis.Addr == "" {
+		errs = append(errs, "REDIS_ADDR is required")
+	}
+	if len(errs) > 0 {
+		return errors.New("missing required config:\n  - " + strings.Join(errs, "\n  - "))
+	}
+	return nil
+}
+
 func Load() (*Config, error) {
 	viper.SetConfigName("app")
 	viper.SetConfigType("env")
@@ -64,7 +89,7 @@ func Load() (*Config, error) {
 		}
 	}
 
-	return &Config{
+	cfg := &Config{
 		Server: ServerConfig{
 			Address: viper.GetString("SERVER_ADDRESS"),
 		},
@@ -91,5 +116,9 @@ func Load() (*Config, error) {
 			SellerAddress: viper.GetString("GST_SELLER_ADDRESS"),
 			StateCode:     viper.GetString("GST_STATE_CODE"),
 		},
-	}, nil
+	}
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
 }

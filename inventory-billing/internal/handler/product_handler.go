@@ -47,7 +47,7 @@ func (h *ProductHandler) Create(c *gin.Context) {
 		case errors.Is(err, domain.ErrSKUTaken):
 			utils.ErrorResponse(c, http.StatusConflict, err.Error())
 		default:
-			utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
+			utils.ErrorResponse(c, http.StatusInternalServerError, "could not create product")
 		}
 		return
 	}
@@ -105,7 +105,7 @@ func (h *ProductHandler) Update(c *gin.Context) {
 		case errors.Is(err, domain.ErrNotFound):
 			utils.ErrorResponse(c, http.StatusNotFound, "product not found")
 		default:
-			utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
+			utils.ErrorResponse(c, http.StatusInternalServerError, "could not update product")
 		}
 		return
 	}
@@ -226,7 +226,7 @@ func (h *ProductHandler) AdjustStock(c *gin.Context) {
 		case errors.Is(err, domain.ErrInsufficientStock):
 			utils.ErrorResponse(c, http.StatusUnprocessableEntity, err.Error())
 		default:
-			utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
+			utils.ErrorResponse(c, http.StatusInternalServerError, "could not adjust stock")
 		}
 		return
 	}

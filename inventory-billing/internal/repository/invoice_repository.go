@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/yourusername/inventory-billing/internal/domain"
+	"github.com/yourusername/inventory-billing/pkg/utils"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -156,7 +156,7 @@ func (r *invoiceRepository) MarkPaid(ctx context.Context, id uuid.UUID) (*domain
 	now := time.Now().UTC()
 	if err := r.db.WithContext(ctx).Model(&domain.Invoice{}).
 		Where("id = ?", id).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"status":  domain.InvoicePaid,
 			"paid_at": now,
 		}).Error; err != nil {
@@ -241,7 +241,8 @@ func (r *invoiceRepository) List(ctx context.Context, filter domain.InvoiceFilte
 		return nil, 0, err
 	}
 
-	order := r.resolveOrder(filter.SortBy, filter.SortDir)
+	order := utils.OrderClause(filter.SortBy, filter.SortDir,
+		[]string{"issued_at", "due_at", "total_price", "created_at"}, "issued_at")
 
 	var invoices []domain.Invoice
 	err := r.applyFilters(ctx, filter).
@@ -328,17 +329,3 @@ func (r *invoiceRepository) applyFilters(ctx context.Context, f domain.InvoiceFi
 	return q
 }
 
-func (r *invoiceRepository) resolveOrder(sortBy, sortDir string) string {
-	allowed := map[string]bool{
-		"issued_at": true, "due_at": true, "total_price": true, "created_at": true,
-	}
-	col := "issued_at"
-	if allowed[sortBy] {
-		col = sortBy
-	}
-	dir := "DESC"
-	if strings.EqualFold(sortDir, "asc") {
-		dir = "ASC"
-	}
-	return fmt.Sprintf("%s %s", col, dir)
-}

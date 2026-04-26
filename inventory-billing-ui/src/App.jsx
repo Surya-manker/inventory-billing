@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard'
 import Products from './pages/Products'
 import Customers from './pages/Customers'
 import Invoices from './pages/Invoices'
+import Profile from './pages/Profile'
 
 export default function App() {
   return (
@@ -16,9 +17,10 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/products" element={<Products />} />
+          <Route path="/products"  element={<Products />} />
           <Route path="/customers" element={<Customers />} />
-          <Route path="/invoices" element={<Invoices />} />
+          <Route path="/invoices"  element={<Invoices />} />
+          <Route path="/profile"   element={<Profile />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

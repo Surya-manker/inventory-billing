@@ -12,7 +12,11 @@ func UserIDFromCtx(c *gin.Context) (uuid.UUID, error) {
 	if !exists {
 		return uuid.Nil, errors.New("user not authenticated")
 	}
-	id, err := uuid.Parse(val.(string))
+	str, ok := val.(string)
+	if !ok {
+		return uuid.Nil, errors.New("user_id context value has unexpected type")
+	}
+	id, err := uuid.Parse(str)
 	if err != nil {
 		return uuid.Nil, errors.New("invalid user id in context")
 	}

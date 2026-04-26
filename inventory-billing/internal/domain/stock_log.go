@@ -17,18 +17,19 @@ const (
 )
 
 type StockLog struct {
-	ID             uuid.UUID       `gorm:"type:varchar(36);primaryKey"     json:"id"`
-	ProductID      uuid.UUID       `gorm:"type:varchar(36);not null;index" json:"product_id"`
-	Product        Product         `gorm:"foreignKey:ProductID"            json:"product,omitempty"`
-	UserID         uuid.UUID       `gorm:"type:varchar(36);not null"       json:"user_id"`
-	User           User            `gorm:"foreignKey:UserID"               json:"user,omitempty"`
-	InvoiceID      *uuid.UUID      `gorm:"type:varchar(36)"                json:"invoice_id,omitempty"`
-	ChangeType     StockChangeType `gorm:"type:varchar(30);not null"       json:"change_type"`
-	QuantityBefore int             `gorm:"not null"                        json:"quantity_before"`
-	QuantityChange int             `gorm:"not null"                        json:"quantity_change"`
-	QuantityAfter  int             `gorm:"not null"                        json:"quantity_after"`
-	Note           string          `gorm:"type:text"                       json:"note"`
-	CreatedAt      time.Time       `json:"created_at"`
+	ID             uuid.UUID       `gorm:"type:varchar(36);primaryKey"                    json:"id"`
+	ProductID      uuid.UUID       `gorm:"type:varchar(36);not null;index:idx_sl_product"  json:"product_id"`
+	Product        Product         `gorm:"foreignKey:ProductID"                           json:"product,omitempty"`
+	UserID         uuid.UUID       `gorm:"type:varchar(36);not null"                      json:"user_id"`
+	User           User            `gorm:"foreignKey:UserID"                              json:"user,omitempty"`
+	InvoiceID      *uuid.UUID      `gorm:"type:varchar(36)"                               json:"invoice_id,omitempty"`
+	ChangeType     StockChangeType `gorm:"type:varchar(30);not null"                      json:"change_type"`
+	QuantityBefore int             `gorm:"not null"                                       json:"quantity_before"`
+	QuantityChange int             `gorm:"not null"                                       json:"quantity_change"`
+	QuantityAfter  int             `gorm:"not null"                                       json:"quantity_after"`
+	Note           string          `gorm:"type:text"                                      json:"note"`
+	// index on created_at supports date-range queries in the audit log
+	CreatedAt      time.Time       `gorm:"index"                                          json:"created_at"`
 }
 
 func (s *StockLog) BeforeCreate(tx *gorm.DB) error {

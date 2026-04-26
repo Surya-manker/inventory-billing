@@ -41,10 +41,13 @@ type Invoice struct {
 	SGSTAmount float64 `gorm:"type:decimal(12,2);not null;default:0" json:"sgst_amount"`
 	IGSTAmount float64 `gorm:"type:decimal(12,2);not null;default:0" json:"igst_amount"`
 
-	Status InvoiceStatus `gorm:"type:varchar(20);not null;default:'pending'" json:"status"`
-	Notes  string        `gorm:"type:text"                                   json:"notes"`
+	Status InvoiceStatus `gorm:"type:varchar(20);not null;default:'pending';index" json:"status"`
+	Notes  string        `gorm:"type:text"                                        json:"notes"`
 
-	IssuedAt  time.Time  `json:"issued_at"`
+	// Composite index covers the two most common list-query filter combos:
+	//   - status + issued_at  (e.g. all pending invoices sorted by date)
+	//   - customer_id already has its own index above
+	IssuedAt  time.Time  `gorm:"index"                json:"issued_at"`
 	DueAt     time.Time  `json:"due_at"`
 	PaidAt    *time.Time `json:"paid_at,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`

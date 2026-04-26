@@ -3,10 +3,13 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/yourusername/inventory-billing/internal/domain"
 	"github.com/yourusername/inventory-billing/internal/repository"
+	"github.com/yourusername/inventory-billing/pkg/cache"
 	"gorm.io/gorm"
 )
 
@@ -38,12 +41,46 @@ type UpdateProductInput struct {
 	Price       float64
 }
 
-type productService struct {
-	repo repository.ProductRepository
+// pagedProducts is the cache-serialised shape for a paginated product list.
+type pagedProducts struct {
+	Items []domain.Product `json:"items"`
+	Total int64            `json:"total"`
 }
 
-func NewProductService(repo repository.ProductRepository) ProductService {
-	return &productService{repo: repo}
+type productService struct {
+	repo  repository.ProductRepository
+	cache *cache.Cache // nil → caching disabled
+}
+
+// NewProductService creates a ProductService. Pass a non-nil *cache.Cache to
+// enable transparent Redis caching of the product list (3-minute TTL).
+func NewProductService(repo repository.ProductRepository, c *cache.Cache) ProductService {
+	return &productService{repo: repo, cache: c}
+}
+
+// productListKey builds a deterministic cache key from filter + pagination.
+// Changing any parameter produces a different key so stale data is never served.
+func productListKey(f domain.ProductFilter, limit, offset int) string {
+	cat := ""
+	if f.CategoryID != nil {
+		cat = f.CategoryID.String()
+	}
+	low := -1
+	if f.LowStockMax != nil {
+		low = *f.LowStockMax
+	}
+	return fmt.Sprintf("products:list:s=%s:c=%s:min=%.2f:max=%.2f:low=%d:by=%s:dir=%s:l=%d:o=%d",
+		f.Search, cat, f.MinPrice, f.MaxPrice, low, f.SortBy, f.SortDir, limit, offset)
+}
+
+// invalidateProductCache removes all product list keys.
+// We use a wildcard scan to be thorough — acceptable since mutations are rare.
+func (s *productService) invalidateProductCache(ctx context.Context) {
+	if s.cache == nil {
+		return
+	}
+	// Best-effort; a cache miss on the next read is harmless.
+	_ = s.cache.Del(ctx, "products:list:*")
 }
 
 func (s *productService) Create(ctx context.Context, input CreateProductInput) (*domain.Product, error) {
@@ -72,6 +109,7 @@ func (s *productService) Create(ctx context.Context, input CreateProductInput) (
 	if err := s.repo.Create(ctx, product); err != nil {
 		return nil, err
 	}
+	s.invalidateProductCache(ctx)
 	return product, nil
 }
 
@@ -117,6 +155,7 @@ func (s *productService) Update(ctx context.Context, id uuid.UUID, input UpdateP
 	if err := s.repo.Update(ctx, product); err != nil {
 		return nil, err
 	}
+	s.invalidateProductCache(ctx)
 	return product, nil
 }
 
@@ -137,11 +176,26 @@ func (s *productService) Delete(ctx context.Context, id uuid.UUID) error {
 		return domain.ErrProductInUse
 	}
 
+	s.invalidateProductCache(ctx)
 	return s.repo.Delete(ctx, id)
 }
 
 func (s *productService) List(ctx context.Context, filter domain.ProductFilter, limit, offset int) ([]domain.Product, int64, error) {
-	return s.repo.List(ctx, filter, limit, offset)
+	if s.cache == nil {
+		return s.repo.List(ctx, filter, limit, offset)
+	}
+	key := productListKey(filter, limit, offset)
+	result, err := cache.GetOrSet(ctx, s.cache, key, 3*time.Minute, func() (pagedProducts, error) {
+		items, total, err := s.repo.List(ctx, filter, limit, offset)
+		if err != nil {
+			return pagedProducts{}, err
+		}
+		return pagedProducts{Items: items, Total: total}, nil
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	return result.Items, result.Total, nil
 }
 
 // AdjustStock delegates to the repository's atomic operation and validates
@@ -155,5 +209,9 @@ func (s *productService) AdjustStock(ctx context.Context, input domain.StockAdju
 		return nil, errors.New("quantity_change must be non-zero")
 	}
 
-	return s.repo.AdjustStock(ctx, input)
+	log, err := s.repo.AdjustStock(ctx, input)
+	if err == nil {
+		s.invalidateProductCache(ctx)
+	}
+	return log, err
 }

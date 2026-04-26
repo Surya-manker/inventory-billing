@@ -69,7 +69,7 @@ func (s *invoiceService) Create(ctx context.Context, input CreateInvoiceInput) (
 	if len(input.Items) == 0 {
 		return nil, errors.New("invoice must contain at least one item")
 	}
-	if input.DueAt.IsZero() || input.DueAt.Before(time.Now()) {
+	if input.DueAt.IsZero() || input.DueAt.UTC().Before(time.Now().UTC()) {
 		return nil, errors.New("due_at must be a future date")
 	}
 
@@ -146,7 +146,13 @@ func (s *invoiceService) Create(ctx context.Context, input CreateInvoiceInput) (
 	totalPrice := utils.Round2(taxableAmount + taxAmount)
 
 	// ── GST split (CGST+SGST for intra-state, IGST for inter-state) ──────────
-	gst := utils.SplitGST(taxAmount, 0 /* rate is per-item, summary uses amount */, intraState)
+	// Compute the effective blended tax rate across all line items so the invoice
+	// summary shows a meaningful rate alongside the amount.
+	var effectiveTaxRate float64
+	if subTotal > 0 {
+		effectiveTaxRate = utils.Round2(taxAmount / subTotal * 100)
+	}
+	gst := utils.SplitGST(taxAmount, effectiveTaxRate, intraState)
 
 	invoice := &domain.Invoice{
 		CustomerID:    input.CustomerID,

@@ -2,11 +2,10 @@ package repository
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/yourusername/inventory-billing/internal/domain"
+	"github.com/yourusername/inventory-billing/pkg/utils"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -77,7 +76,8 @@ func (r *productRepository) List(ctx context.Context, filter domain.ProductFilte
 		return nil, 0, err
 	}
 
-	order := r.resolveOrder(filter.SortBy, filter.SortDir)
+	order := utils.OrderClause(filter.SortBy, filter.SortDir,
+		[]string{"name", "price", "stock", "created_at"}, "created_at")
 
 	var products []domain.Product
 	err := r.applyFilters(ctx, filter).
@@ -172,18 +172,3 @@ func (r *productRepository) applyFilters(ctx context.Context, f domain.ProductFi
 	return q
 }
 
-func (r *productRepository) resolveOrder(sortBy, sortDir string) string {
-	allowed := map[string]bool{
-		"name": true, "price": true, "stock": true, "created_at": true,
-	}
-	col := "created_at"
-	if allowed[sortBy] {
-		col = sortBy
-	}
-
-	dir := "DESC"
-	if strings.EqualFold(sortDir, "asc") {
-		dir = "ASC"
-	}
-	return fmt.Sprintf("%s %s", col, dir)
-}
