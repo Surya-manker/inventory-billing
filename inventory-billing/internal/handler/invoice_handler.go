@@ -6,19 +6,25 @@ import (
 	"strconv"
 	"time"
 
+	"encoding/json"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/yourusername/inventory-billing/internal/domain"
+	"github.com/yourusername/inventory-billing/internal/repository"
 	"github.com/yourusername/inventory-billing/internal/service"
+	"github.com/yourusername/inventory-billing/pkg/queue"
 	"github.com/yourusername/inventory-billing/pkg/utils"
 )
 
 type InvoiceHandler struct {
-	svc service.InvoiceService
+	svc     service.InvoiceService
+	jobRepo repository.JobRepository  // for job status queries
+	queue   *queue.Client             // for enqueuing PDF jobs
 }
 
-func NewInvoiceHandler(svc service.InvoiceService) *InvoiceHandler {
-	return &InvoiceHandler{svc: svc}
+func NewInvoiceHandler(svc service.InvoiceService, jobRepo repository.JobRepository, q *queue.Client) *InvoiceHandler {
+	return &InvoiceHandler{svc: svc, jobRepo: jobRepo, queue: q}
 }
 
 // Create godoc
@@ -79,7 +85,25 @@ func (h *InvoiceHandler) Create(c *gin.Context) {
 		}
 		return
 	}
-	utils.SuccessResponse(c, http.StatusCreated, "invoice created", invoice)
+	// Enqueue PDF generation asynchronously. The API returns 201 immediately;
+	// the PDF is generated in the background and emailed once ready.
+	// A failure to enqueue must not fail the invoice creation response.
+	pdfJobID := ""
+	if h.queue != nil {
+		actorIDStr := actorID.String()
+		if jobID, err := h.queue.EnqueueInvoicePDF(c.Request.Context(), queue.InvoicePDFPayload{
+			InvoiceID:   invoice.ID.String(),
+			RequestedBy: actorIDStr,
+		}); err == nil {
+			pdfJobID = jobID
+		}
+	}
+
+	resp := gin.H{
+		"invoice":    invoice,
+		"pdf_job_id": pdfJobID, // client polls GET /jobs/:id for status
+	}
+	utils.SuccessResponse(c, http.StatusCreated, "invoice created", resp)
 }
 
 // GetByID godoc
@@ -192,6 +216,70 @@ func (h *InvoiceHandler) Delete(c *gin.Context) {
 		return
 	}
 	utils.SuccessResponse(c, http.StatusOK, "invoice deleted", nil)
+}
+
+// GetPDFStatus returns the status of the PDF generation job for an invoice.
+//
+// GET /api/v1/invoices/:id/pdf
+//
+// Response 200: job completed — body contains pdf_url for download.
+// Response 202: job is still pending or processing — body contains job status.
+// Response 404: no PDF job has been enqueued for this invoice.
+func (h *InvoiceHandler) GetPDFStatus(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid invoice id")
+		return
+	}
+
+	jobs, err := h.jobRepo.FindByEntity(c.Request.Context(), "invoice", id.String())
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "could not fetch job status")
+		return
+	}
+
+	// Find the most recent PDF job for this invoice.
+	var pdfJob *domain.JobRecord
+	for i := range jobs {
+		if jobs[i].Type == queue.TypeInvoicePDF {
+			pdfJob = &jobs[i]
+			break // FindByEntity returns newest-first
+		}
+	}
+
+	if pdfJob == nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "no pdf job found for this invoice")
+		return
+	}
+
+	if pdfJob.Status == domain.JobStatusCompleted {
+		// Decode the result to extract the PDF URL.
+		var result queue.InvoicePDFResult
+		if err := decodeJobResult(pdfJob.Result, &result); err == nil && result.PDFURL != "" {
+			utils.SuccessResponse(c, http.StatusOK, "pdf ready", gin.H{
+				"pdf_url":      result.PDFURL,
+				"job_id":       pdfJob.ID,
+				"completed_at": pdfJob.CompletedAt,
+			})
+			return
+		}
+	}
+
+	// Still processing or failed.
+	status := http.StatusAccepted // 202 — try again later
+	if pdfJob.Status == domain.JobStatusDead || pdfJob.Status == domain.JobStatusFailed {
+		status = http.StatusUnprocessableEntity
+	}
+	utils.SuccessResponse(c, status, "pdf job "+string(pdfJob.Status), gin.H{
+		"job_id":      pdfJob.ID,
+		"status":      pdfJob.Status,
+		"retry_count": pdfJob.RetryCount,
+		"error":       pdfJob.ErrorMsg,
+	})
+}
+
+func decodeJobResult(s string, v any) error {
+	return json.Unmarshal([]byte(s), v)
 }
 
 // List godoc

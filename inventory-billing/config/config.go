@@ -13,6 +13,9 @@ type Config struct {
 	JWT      JWTConfig
 	Redis    RedisConfig
 	GST      GSTConfig
+	Worker   WorkerConfig
+	Mail     MailConfig
+	Storage  StorageConfig
 }
 
 type ServerConfig struct {
@@ -37,6 +40,26 @@ type RedisConfig struct {
 	Addr     string
 	Password string
 	DB       int
+}
+
+type WorkerConfig struct {
+	Concurrency int // number of concurrent Asynq worker goroutines
+}
+
+type MailConfig struct {
+	Provider string // "smtp" | "noop"
+	From     string // display address, e.g. "Acme Billing <noreply@acme.com>"
+	SMTPHost string
+	SMTPPort int
+	SMTPUser string
+	SMTPPass string
+	UseTLS   bool
+}
+
+type StorageConfig struct {
+	Provider string // "local" | "s3"
+	LocalDir string // base directory for LocalStorage
+	LocalURL string // public URL prefix served by the static file handler
 }
 
 type GSTConfig struct {
@@ -80,6 +103,13 @@ func Load() (*Config, error) {
 	viper.SetDefault("JWT_ACCESS_EXPIRY_HOUR", 1)
 	viper.SetDefault("JWT_REFRESH_EXPIRY_DAY", 7)
 	viper.SetDefault("REDIS_DB", 0)
+	viper.SetDefault("WORKER_CONCURRENCY", 10)
+	viper.SetDefault("MAIL_PROVIDER", "noop")
+	viper.SetDefault("MAIL_SMTP_PORT", 587)
+	viper.SetDefault("MAIL_USE_TLS", false)
+	viper.SetDefault("STORAGE_PROVIDER", "local")
+	viper.SetDefault("STORAGE_LOCAL_DIR", "./data/assets")
+	viper.SetDefault("STORAGE_LOCAL_URL", "http://localhost:8080/assets")
 	viper.SetDefault("GST_SELLER_NAME", "My Business")
 	viper.SetDefault("GST_STATE_CODE", "")
 
@@ -109,6 +139,23 @@ func Load() (*Config, error) {
 			Addr:     viper.GetString("REDIS_ADDR"),
 			Password: viper.GetString("REDIS_PASSWORD"),
 			DB:       viper.GetInt("REDIS_DB"),
+		},
+		Worker: WorkerConfig{
+			Concurrency: viper.GetInt("WORKER_CONCURRENCY"),
+		},
+		Mail: MailConfig{
+			Provider: viper.GetString("MAIL_PROVIDER"),
+			From:     viper.GetString("MAIL_FROM"),
+			SMTPHost: viper.GetString("MAIL_SMTP_HOST"),
+			SMTPPort: viper.GetInt("MAIL_SMTP_PORT"),
+			SMTPUser: viper.GetString("MAIL_SMTP_USER"),
+			SMTPPass: viper.GetString("MAIL_SMTP_PASS"),
+			UseTLS:   viper.GetBool("MAIL_USE_TLS"),
+		},
+		Storage: StorageConfig{
+			Provider: viper.GetString("STORAGE_PROVIDER"),
+			LocalDir: viper.GetString("STORAGE_LOCAL_DIR"),
+			LocalURL: viper.GetString("STORAGE_LOCAL_URL"),
 		},
 		GST: GSTConfig{
 			SellerName:    viper.GetString("GST_SELLER_NAME"),

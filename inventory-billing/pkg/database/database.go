@@ -52,6 +52,7 @@ func migrate(db *gorm.DB) error {
 		// independent tables
 		&domain.User{},
 		&domain.Category{},  // must come before Product
+		&domain.JobRecord{}, // async job tracking — no foreign keys
 		&domain.Customer{},
 		&domain.Product{},
 		&domain.InvoiceCounter{},

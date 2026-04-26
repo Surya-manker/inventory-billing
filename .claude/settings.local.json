@@ -5,7 +5,8 @@
       "Bash(go build *)",
       "Bash(go vet *)",
       "Bash(go run *)",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Bash(go get *)"
     ]
   }
 }

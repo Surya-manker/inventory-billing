@@ -7,12 +7,12 @@ import { getMe, updateProfile, changePassword } from '../api/auth'
 function avatarColor(name = '') {
   const palettes = [
     ['bg-violet-500', 'text-violet-50'],
-    ['bg-blue-500',   'text-blue-50'],
-    ['bg-emerald-500','text-emerald-50'],
-    ['bg-rose-500',   'text-rose-50'],
-    ['bg-amber-500',  'text-amber-50'],
-    ['bg-cyan-500',   'text-cyan-50'],
-    ['bg-pink-500',   'text-pink-50'],
+    ['bg-blue-500', 'text-blue-50'],
+    ['bg-emerald-500', 'text-emerald-50'],
+    ['bg-rose-500', 'text-rose-50'],
+    ['bg-amber-500', 'text-amber-50'],
+    ['bg-cyan-500', 'text-cyan-50'],
+    ['bg-pink-500', 'text-pink-50'],
     ['bg-indigo-500', 'text-indigo-50'],
   ]
   let hash = 0
@@ -22,7 +22,7 @@ function avatarColor(name = '') {
 
 function passwordStrength(pw) {
   let score = 0
-  if (pw.length >= 8)  score++
+  if (pw.length >= 8) score++
   if (pw.length >= 12) score++
   if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++
   if (/[0-9]/.test(pw) || /[^A-Za-z0-9]/.test(pw)) score++
@@ -47,15 +47,13 @@ function PasswordStrengthBar({ password }) {
         {[1, 2, 3, 4].map((i) => (
           <div
             key={i}
-            className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-              s >= i ? strengthColors[s] : 'bg-gray-200'
-            }`}
+            className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${s >= i ? strengthColors[s] : 'bg-gray-200'
+              }`}
           />
         ))}
       </div>
-      <p className={`text-xs font-medium ${
-        s <= 1 ? 'text-red-500' : s === 2 ? 'text-yellow-600' : s === 3 ? 'text-blue-600' : 'text-green-600'
-      }`}>
+      <p className={`text-xs font-medium ${s <= 1 ? 'text-red-500' : s === 2 ? 'text-yellow-600' : s === 3 ? 'text-blue-600' : 'text-green-600'
+        }`}>
         {strengthLabels[s]}
       </p>
     </div>
@@ -82,7 +80,7 @@ function Toast({ type, message, onClose }) {
 
   const styles = {
     success: 'bg-green-50 border-green-200 text-green-800',
-    error:   'bg-red-50   border-red-200   text-red-800',
+    error: 'bg-red-50   border-red-200   text-red-800',
   }
   const icons = {
     success: (
@@ -115,20 +113,20 @@ function Toast({ type, message, onClose }) {
 export default function Profile() {
   const { user, isAdmin, updateUser } = useAuth()
 
-  const [freshUser, setFreshUser]   = useState(user)
+  const [freshUser, setFreshUser] = useState(user)
   const [fetchError, setFetchError] = useState('')
 
   // Profile edit state
   const [profileForm, setProfileForm] = useState({ name: user?.name || '', email: user?.email || '' })
   const [profileSaving, setProfileSaving] = useState(false)
-  const [profileToast, setProfileToast]   = useState(null) // { type, message }
+  const [profileToast, setProfileToast] = useState(null) // { type, message }
 
   // Password state
   const [pwForm, setPwForm] = useState({ old_password: '', new_password: '', confirm: '' })
-  const [pwSaving, setPwSaving]   = useState(false)
-  const [pwToast, setPwToast]     = useState(null)
-  const [showOld, setShowOld]     = useState(false)
-  const [showNew, setShowNew]     = useState(false)
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwToast, setPwToast] = useState(null)
+  const [showOld, setShowOld] = useState(false)
+  const [showNew, setShowNew] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
   // Fetch fresh user data on mount
@@ -150,8 +148,8 @@ export default function Profile() {
 
   const joinedDate = displayUser?.created_at
     ? new Date(displayUser.created_at).toLocaleDateString('en-IN', {
-        day: 'numeric', month: 'long', year: 'numeric',
-      })
+      day: 'numeric', month: 'long', year: 'numeric',
+    })
     : '—'
 
   // ── handlers ────────────────────────────────────────────────────────────────
@@ -163,7 +161,7 @@ export default function Profile() {
     setProfileToast(null)
     try {
       await updateProfile(displayUser.id, {
-        name:  profileForm.name.trim(),
+        name: profileForm.name.trim(),
         email: profileForm.email.trim(),
       })
       updateUser({ name: profileForm.name.trim(), email: profileForm.email.trim() })
@@ -203,7 +201,7 @@ export default function Profile() {
   const pw = (k) => (e) => setPwForm({ ...pwForm, [k]: e.target.value })
 
   const profileDirty =
-    profileForm.name.trim()  !== (displayUser?.name  || '') ||
+    profileForm.name.trim() !== (displayUser?.name || '') ||
     profileForm.email.trim() !== (displayUser?.email || '')
 
   // ── render ──────────────────────────────────────────────────────────────────
@@ -228,7 +226,7 @@ export default function Profile() {
         )}
 
         {/* ── Identity card ── */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-visible">
           {/* Gradient banner */}
           <div className="h-24 sm:h-32 bg-gradient-to-r from-brand-700 via-brand-600 to-violet-600 relative">
             <div className="absolute inset-0 opacity-20"
@@ -236,19 +234,18 @@ export default function Profile() {
           </div>
 
           <div className="px-4 sm:px-6 pb-6">
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 -mt-10 sm:-mt-14">
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 -mt-8 sm:-mt-12">
               {/* Avatar */}
-              <div className={`h-20 w-20 sm:h-28 sm:w-28 rounded-2xl ${avatarBg} ${avatarFg} flex items-center justify-center text-2xl sm:text-3xl font-bold ring-4 ring-white shadow-lg flex-shrink-0`}>
+              <div className={`relative z-10 h-20 w-20 sm:h-28 sm:w-28 rounded-2xl ${avatarBg} ${avatarFg} flex items-center justify-center text-2xl sm:text-3xl font-bold ring-4 ring-white shadow-lg flex-shrink-0`}>
                 {initials}
               </div>
 
               {/* Role badge */}
               <div className="pb-1">
-                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
-                  isAdmin
-                    ? 'bg-violet-100 text-violet-700'
-                    : 'bg-blue-100 text-blue-700'
-                }`}>
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${isAdmin
+                  ? 'bg-violet-100 text-violet-700'
+                  : 'bg-blue-100 text-blue-700'
+                  }`}>
                   <span className="h-1.5 w-1.5 rounded-full bg-current" />
                   {displayUser?.role?.charAt(0).toUpperCase() + displayUser?.role?.slice(1)}
                 </span>
@@ -395,11 +392,10 @@ export default function Profile() {
                 <button
                   type="submit"
                   disabled={profileSaving || !profileDirty}
-                  className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-medium transition-all ${
-                    profileDirty && !profileSaving
-                      ? 'bg-brand-600 text-white hover:bg-brand-700 shadow-sm hover:shadow'
-                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  }`}
+                  className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-medium transition-all ${profileDirty && !profileSaving
+                    ? 'bg-brand-600 text-white hover:bg-brand-700 shadow-sm hover:shadow'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    }`}
                 >
                   {profileSaving ? (
                     <>
@@ -531,13 +527,12 @@ export default function Profile() {
                   </div>
                   <input
                     type={showConfirm ? 'text' : 'password'}
-                    className={`input pl-9 pr-10 ${
-                      pwForm.confirm && pwForm.new_password !== pwForm.confirm
-                        ? 'border-red-300 focus:border-red-400 focus:ring-red-300'
-                        : pwForm.confirm && pwForm.new_password === pwForm.confirm
+                    className={`input pl-9 pr-10 ${pwForm.confirm && pwForm.new_password !== pwForm.confirm
+                      ? 'border-red-300 focus:border-red-400 focus:ring-red-300'
+                      : pwForm.confirm && pwForm.new_password === pwForm.confirm
                         ? 'border-green-300 focus:border-green-400 focus:ring-green-300'
                         : ''
-                    }`}
+                      }`}
                     placeholder="Re-enter new password"
                     value={pwForm.confirm}
                     onChange={pw('confirm')}

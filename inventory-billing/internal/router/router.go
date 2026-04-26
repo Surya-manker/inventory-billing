@@ -1,6 +1,8 @@
 package router
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/yourusername/inventory-billing/config"
 	"github.com/yourusername/inventory-billing/internal/handler"
@@ -8,6 +10,8 @@ import (
 	"github.com/yourusername/inventory-billing/internal/repository"
 	"github.com/yourusername/inventory-billing/internal/service"
 	"github.com/yourusername/inventory-billing/pkg/cache"
+	"github.com/yourusername/inventory-billing/pkg/queue"
+	"github.com/yourusername/inventory-billing/pkg/storage"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -23,12 +27,43 @@ func Setup(db *gorm.DB, cfg *config.Config) *gin.Engine {
 		middleware.AuditLog(db), // append-only audit trail for all mutations
 	)
 
+	// ── health checks (no auth required) ─────────────────────────────────────
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	r.GET("/health/ready", func(c *gin.Context) {
+		sqlDB, err := db.DB()
+		if err != nil || sqlDB.PingContext(c.Request.Context()) != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "db_down"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "ready"})
+	})
+
+	// ── static assets (invoice PDFs stored locally) ───────────────────────────
+	if cfg.Storage.Provider == "local" {
+		r.Static("/assets", cfg.Storage.LocalDir)
+	}
+
 	// ── infrastructure ────────────────────────────────────────────────────────
 	rdb := cache.NewRedisClient(cfg)
 	tokenStore := cache.NewTokenStore(rdb, cfg.JWT.RefreshTokenExpiryDay)
-
-	// ── infrastructure ────────────────────────────────────────────────────────
 	genericCache := cache.NewCache(rdb)
+
+	// ── job queue client ──────────────────────────────────────────────────────
+	jobRepo := repository.NewJobRepository(db)
+	queueClient := queue.NewClient(cfg, jobRepo, log)
+
+	// ── storage backend ───────────────────────────────────────────────────────
+	var stor storage.Storage
+	if cfg.Storage.Provider == "local" {
+		var err error
+		stor, err = storage.NewLocalStorage(cfg.Storage.LocalDir, cfg.Storage.LocalURL)
+		if err != nil {
+			log.Fatal("failed to init local storage", zap.Error(err))
+		}
+	}
+	_ = stor // used by worker; server only needs it for health checks
 
 	// ── repositories ─────────────────────────────────────────────────────────
 	userRepo       := repository.NewUserRepository(db)
@@ -62,7 +97,8 @@ func Setup(db *gorm.DB, cfg *config.Config) *gin.Engine {
 	userH         := handler.NewUserHandler(userSvc)
 	customerH     := handler.NewCustomerHandler(customerSvc)
 	productH      := handler.NewProductHandler(productSvc)
-	invoiceH      := handler.NewInvoiceHandler(invoiceSvc)
+	jobH          := handler.NewJobHandler(jobRepo)
+	invoiceH      := handler.NewInvoiceHandler(invoiceSvc, jobRepo, queueClient)
 	stockH        := handler.NewStockHandler(stockSvc)
 	vendorH       := handler.NewVendorHandler(vendorSvc)
 	purchaseH     := handler.NewPurchaseHandler(purchaseSvc)
@@ -112,11 +148,15 @@ func Setup(db *gorm.DB, cfg *config.Config) *gin.Engine {
 	admin.DELETE("/products/:id",   productH.Delete)
 	admin.PATCH("/products/:id/stock", productH.AdjustStock)
 
+	// job status — generic polling endpoint for any async operation
+	p.GET("/jobs/:id", jobH.GetByID)
+
 	// invoices — /number/:number must be declared before /:id
 	p.GET("/invoices",                invoiceH.List)
 	p.POST("/invoices",               invoiceH.Create)
 	p.GET("/invoices/number/:number", invoiceH.GetByNumber)
 	p.GET("/invoices/:id",            invoiceH.GetByID)
+	p.GET("/invoices/:id/pdf",        invoiceH.GetPDFStatus) // 202 while pending, 200 when ready
 	admin.PATCH("/invoices/:id/status", invoiceH.UpdateStatus)
 	admin.DELETE("/invoices/:id",       invoiceH.Delete)
 

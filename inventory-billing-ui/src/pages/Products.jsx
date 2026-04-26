@@ -12,25 +12,25 @@ const EMPTY = { name: '', description: '', sku: '', price: '', stock: '' }
 
 export default function Products() {
   const { isAdmin } = useAuth()
-  const [items, setItems]   = useState([])
-  const [total, setTotal]   = useState(0)
+  const [items, setItems] = useState([])
+  const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
-  const [error, setError]   = useState('')
+  const [error, setError] = useState('')
 
-  const [addOpen, setAddOpen]   = useState(false)
-  const [form, setForm]         = useState(EMPTY)
+  const [addOpen, setAddOpen] = useState(false)
+  const [form, setForm] = useState(EMPTY)
   const [formError, setFormError] = useState('')
-  const [saving, setSaving]     = useState(false)
+  const [saving, setSaving] = useState(false)
 
   const [deleteTarget, setDeleteTarget] = useState(null)
-  const [deleting, setDeleting]         = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const [stockTarget, setStockTarget] = useState(null)
   const [stockForm, setStockForm] = useState({ quantity_change: '', change_type: 'adjustment', note: '' })
   const [stockSaving, setStockSaving] = useState(false)
-  const [stockError, setStockError]   = useState('')
+  const [stockError, setStockError] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -169,11 +169,10 @@ export default function Products() {
                         {formatCurrency(p.price)}
                       </td>
                       <td className="table-td">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          p.stock <= (p.low_stock_threshold ?? 5)
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${p.stock <= (p.low_stock_threshold ?? 5)
                             ? 'bg-red-100 text-red-700'
                             : 'bg-green-100 text-green-700'
-                        }`}>
+                          }`}>
                           {p.stock}
                         </span>
                       </td>
