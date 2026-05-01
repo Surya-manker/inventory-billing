@@ -1,17 +1,19 @@
 import { useEffect, useState, useCallback } from 'react'
-import { getInvoices, createInvoice, updateInvoiceStatus, deleteInvoice } from '../api/invoices'
+import { getInvoices, getInvoice, createInvoice, updateInvoiceStatus, deleteInvoice } from '../api/invoices'
 import { getCustomers } from '../api/customers'
 import { getProducts } from '../api/products'
+import { getPaymentsByInvoice, recordPayment, deletePayment } from '../api/payments'
 import { useAuth } from '../context/AuthContext'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import Pagination from '../components/common/Pagination'
 import Badge from '../components/common/Badge'
-import { formatCurrency, formatDate, statusColors } from '../utils/formatters'
+import { formatCurrency, formatDate, formatDateTime, statusColors } from '../utils/formatters'
 
 const LIMIT = 10
-const STATUSES = ['', 'pending', 'paid', 'canceled']
+const STATUSES = ['', 'pending', 'partial', 'overdue', 'paid', 'canceled']
+const PAYMENT_METHODS = ['cash', 'upi', 'neft', 'cheque', 'card']
 
 function InvoiceRow({ inv, isAdmin, onStatusChange, onDelete, onView }) {
   return (
@@ -44,7 +46,7 @@ function InvoiceRow({ inv, isAdmin, onStatusChange, onDelete, onView }) {
       {isAdmin && (
         <td className="table-td text-right">
           <div className="flex items-center justify-end gap-1">
-            {inv.status === 'pending' && (
+            {['pending', 'partial', 'overdue'].includes(inv.status) && (
               <>
                 <button
                   className="hidden sm:inline-flex btn-secondary btn-sm text-green-700 border-green-300 hover:bg-green-50"
@@ -58,7 +60,6 @@ function InvoiceRow({ inv, isAdmin, onStatusChange, onDelete, onView }) {
                 >
                   Cancel
                 </button>
-                {/* Mobile: compact icon buttons */}
                 <button
                   className="sm:hidden p-1.5 rounded-lg text-green-600 hover:bg-green-50 border border-green-200"
                   onClick={() => onStatusChange(inv, 'paid')}
@@ -107,6 +108,15 @@ export default function Invoices() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting]         = useState(false)
 
+  // Payments sub-panel (shown inside view modal)
+  const [payments, setPayments]         = useState([])
+  const [paymentSummary, setPaymentSummary] = useState(null)
+  const [payForm, setPayForm]           = useState({ amount: '', method: 'upi', reference_no: '', notes: '' })
+  const [paySaving, setPaySaving]       = useState(false)
+  const [payError, setPayError]         = useState('')
+  const [deletePayTarget, setDeletePayTarget] = useState(null)
+  const [deletingPay, setDeletingPay]   = useState(false)
+
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
@@ -118,6 +128,54 @@ export default function Invoices() {
   }, [offset, statusFilter])
 
   useEffect(() => { load() }, [load])
+
+  // Reload payments whenever the viewed invoice changes
+  useEffect(() => {
+    if (!viewInvoice) { setPayments([]); setPaymentSummary(null); return }
+    getPaymentsByInvoice(viewInvoice.id).then((res) => {
+      setPayments(res.data.data.payments ?? [])
+      setPaymentSummary(res.data.data.summary ?? null)
+    }).catch(() => {})
+  }, [viewInvoice?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const refreshViewInvoice = async () => {
+    if (!viewInvoice) return
+    const [inv, pay] = await Promise.all([
+      getInvoice(viewInvoice.id),
+      getPaymentsByInvoice(viewInvoice.id),
+    ])
+    setViewInvoice(inv.data.data)
+    setPayments(pay.data.data.payments ?? [])
+    setPaymentSummary(pay.data.data.summary ?? null)
+    load()
+  }
+
+  const handleRecordPayment = async (e) => {
+    e.preventDefault(); setPayError(''); setPaySaving(true)
+    try {
+      await recordPayment(viewInvoice.id, {
+        amount:       parseFloat(payForm.amount),
+        method:       payForm.method,
+        reference_no: payForm.reference_no || undefined,
+        notes:        payForm.notes        || undefined,
+        paid_at:      new Date().toISOString(),
+      })
+      setPayForm({ amount: '', method: 'upi', reference_no: '', notes: '' })
+      await refreshViewInvoice()
+    } catch (err) {
+      setPayError(err.response?.data?.message || 'Failed to record payment.')
+    } finally { setPaySaving(false) }
+  }
+
+  const handleDeletePayment = async () => {
+    setDeletingPay(true)
+    try {
+      await deletePayment(deletePayTarget.id)
+      setDeletePayTarget(null)
+      await refreshViewInvoice()
+    } catch (err) { setPayError(err.response?.data?.message || 'Failed to delete payment.') }
+    finally { setDeletingPay(false) }
+  }
 
   const openCreate = async () => {
     setFormError('')
@@ -451,10 +509,11 @@ export default function Invoices() {
       </Modal>
 
       {/* ── View Invoice Modal ── */}
-      <Modal open={!!viewInvoice} onClose={() => setViewInvoice(null)}
+      <Modal open={!!viewInvoice} onClose={() => { setViewInvoice(null); setPayError('') }}
         title={viewInvoice?.invoice_number ?? 'Invoice'} size="lg">
         {viewInvoice && (
           <div className="space-y-5">
+            {/* Meta */}
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="col-span-2 sm:col-span-1">
                 <p className="text-xs text-gray-400 mb-0.5">Customer</p>
@@ -483,6 +542,7 @@ export default function Invoices() {
               )}
             </div>
 
+            {/* Line items */}
             <div className="border border-gray-200 rounded-xl overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm min-w-[320px]">
@@ -536,13 +596,107 @@ export default function Invoices() {
                         {formatCurrency(viewInvoice.total_price)}
                       </td>
                     </tr>
+                    {viewInvoice.paid_amount > 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-4 py-2 text-right text-green-600">Paid</td>
+                        <td className="px-4 py-2 text-right text-green-600">
+                          − {formatCurrency(viewInvoice.paid_amount)}
+                        </td>
+                      </tr>
+                    )}
+                    {viewInvoice.status !== 'paid' && viewInvoice.status !== 'canceled' && (
+                      <tr className="bg-orange-50">
+                        <td colSpan={3} className="px-4 py-2 text-right font-bold text-orange-700">Outstanding</td>
+                        <td className="px-4 py-2 text-right font-bold text-orange-700">
+                          {formatCurrency(viewInvoice.total_price - (viewInvoice.paid_amount ?? 0))}
+                        </td>
+                      </tr>
+                    )}
                   </tfoot>
                 </table>
               </div>
             </div>
+
+            {/* Payment history */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">Payment History</h3>
+              {payments.length === 0 ? (
+                <p className="text-sm text-gray-400 py-2">No payments recorded yet.</p>
+              ) : (
+                <div className="border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
+                  {payments.map((pay) => (
+                    <div key={pay.id} className="px-4 py-2.5 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900">{formatCurrency(pay.amount)}</p>
+                        <p className="text-xs text-gray-400">
+                          {pay.method?.toUpperCase()}
+                          {pay.reference_no ? ` · ${pay.reference_no}` : ''}
+                          {' · '}{formatDateTime(pay.paid_at)}
+                        </p>
+                      </div>
+                      {isAdmin && (
+                        <button onClick={() => setDeletePayTarget(pay)}
+                          className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Record payment form (only for open invoices) */}
+            {['pending', 'partial', 'overdue'].includes(viewInvoice.status) && (
+              <div className="border border-gray-200 rounded-xl p-4 bg-gray-50 space-y-3">
+                <h3 className="text-sm font-semibold text-gray-900">Record Payment</h3>
+                {payError && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">{payError}</div>}
+                <form onSubmit={handleRecordPayment} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Amount (₹) *</label>
+                    <input className="input" type="number" min="0.01" step="0.01" required
+                      placeholder={`Max ${formatCurrency(viewInvoice.total_price - (viewInvoice.paid_amount ?? 0))}`}
+                      value={payForm.amount}
+                      onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="label">Method *</label>
+                    <select className="input" value={payForm.method}
+                      onChange={(e) => setPayForm({ ...payForm, method: e.target.value })}>
+                      {PAYMENT_METHODS.map((m) => (
+                        <option key={m} value={m}>{m.toUpperCase()}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Reference No.</label>
+                    <input className="input" value={payForm.reference_no} placeholder="UTR / Cheque / TxnID"
+                      onChange={(e) => setPayForm({ ...payForm, reference_no: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="label">Notes</label>
+                    <input className="input" value={payForm.notes} placeholder="Optional"
+                      onChange={(e) => setPayForm({ ...payForm, notes: e.target.value })} />
+                  </div>
+                  <div className="sm:col-span-2 flex justify-end">
+                    <button type="submit" className="btn-primary" disabled={paySaving}>
+                      {paySaving ? 'Saving…' : 'Record Payment'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
           </div>
         )}
       </Modal>
+
+      {/* Delete payment confirm */}
+      <ConfirmDialog open={!!deletePayTarget} onClose={() => setDeletePayTarget(null)}
+        onConfirm={handleDeletePayment} loading={deletingPay} title="Delete Payment"
+        message={`Delete payment of ${formatCurrency(deletePayTarget?.amount)}? This will update the invoice balance.`} />
 
       <ConfirmDialog
         open={!!deleteTarget}

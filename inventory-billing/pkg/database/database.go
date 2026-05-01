@@ -62,6 +62,12 @@ func migrate(db *gorm.DB) error {
 		&domain.Warehouse{},
 		&domain.AuditLog{},
 
+		// accounting — Account must precede LedgerEntry (FK on account_id)
+		&domain.Account{},
+		&domain.JECounter{},
+		&domain.JournalEntry{},
+		&domain.LedgerEntry{},
+
 		// tables that reference the above
 		&domain.Invoice{},
 		&domain.InvoiceItem{},

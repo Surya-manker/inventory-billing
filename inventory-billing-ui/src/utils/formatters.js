@@ -22,7 +22,14 @@ export const formatDateTime = (dateStr) => {
 }
 
 export const statusColors = {
-  pending:  'bg-yellow-100 text-yellow-800',
-  paid:     'bg-green-100  text-green-800',
-  canceled: 'bg-red-100    text-red-800',
+  // invoice
+  pending:   'bg-yellow-100 text-yellow-800',
+  partial:   'bg-blue-100   text-blue-800',
+  overdue:   'bg-red-100    text-red-700',
+  paid:      'bg-green-100  text-green-800',
+  canceled:  'bg-gray-100   text-gray-600',
+  // purchase orders
+  draft:     'bg-gray-100   text-gray-600',
+  confirmed: 'bg-blue-100   text-blue-700',
+  received:  'bg-green-100  text-green-800',
 }

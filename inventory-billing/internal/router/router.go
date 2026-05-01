@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -66,28 +67,35 @@ func Setup(db *gorm.DB, cfg *config.Config) *gin.Engine {
 	_ = stor // used by worker; server only needs it for health checks
 
 	// ── repositories ─────────────────────────────────────────────────────────
-	userRepo       := repository.NewUserRepository(db)
-	customerRepo   := repository.NewCustomerRepository(db)
-	productRepo    := repository.NewProductRepository(db)
-	invoiceRepo    := repository.NewInvoiceRepository(db)
-	stockLogRepo   := repository.NewStockLogRepository(db)
-	vendorRepo     := repository.NewVendorRepository(db)
-	purchaseRepo   := repository.NewPurchaseRepository(db)
-	paymentRepo    := repository.NewPaymentRepository(db)
-	reportRepo     := repository.NewReportRepository(db)
-	categoryRepo   := repository.NewCategoryRepository(db)
-	creditNoteRepo := repository.NewCreditNoteRepository(db)
+	userRepo         := repository.NewUserRepository(db)
+	customerRepo     := repository.NewCustomerRepository(db)
+	productRepo      := repository.NewProductRepository(db)
+	invoiceRepo      := repository.NewInvoiceRepository(db)
+	stockLogRepo     := repository.NewStockLogRepository(db)
+	vendorRepo       := repository.NewVendorRepository(db)
+	purchaseRepo     := repository.NewPurchaseRepository(db)
+	paymentRepo      := repository.NewPaymentRepository(db)
+	reportRepo       := repository.NewReportRepository(db)
+	categoryRepo     := repository.NewCategoryRepository(db)
+	creditNoteRepo   := repository.NewCreditNoteRepository(db)
+	accountingRepo   := repository.NewAccountingRepository(db)
+
+	// Seed system chart-of-accounts on every startup (idempotent).
+	if err := accountingRepo.SeedSystemAccounts(context.Background()); err != nil {
+		log.Warn("failed to seed system accounts", zap.Error(err))
+	}
 
 	// ── services ──────────────────────────────────────────────────────────────
 	authSvc       := service.NewAuthService(userRepo, tokenStore, cfg.JWT.Secret, cfg.JWT.AccessTokenExpiryHour)
 	userSvc       := service.NewUserService(userRepo)
 	customerSvc   := service.NewCustomerService(customerRepo)
 	productSvc    := service.NewProductService(productRepo, genericCache)  // cache enabled
-	invoiceSvc    := service.NewInvoiceService(invoiceRepo, productRepo, customerRepo, cfg.GST.StateCode)
+	accountingSvc := service.NewAccountingService(accountingRepo)
+	invoiceSvc    := service.NewInvoiceService(invoiceRepo, productRepo, customerRepo, accountingSvc, cfg.GST.StateCode)
 	stockSvc      := service.NewStockService(productRepo, stockLogRepo)
 	vendorSvc     := service.NewVendorService(vendorRepo)
 	purchaseSvc   := service.NewPurchaseService(purchaseRepo, vendorRepo)
-	paymentSvc    := service.NewPaymentService(paymentRepo, invoiceRepo)
+	paymentSvc    := service.NewPaymentService(paymentRepo, invoiceRepo, accountingSvc)
 	reportSvc     := service.NewReportService(reportRepo)
 	categorySvc   := service.NewCategoryService(categoryRepo)
 	creditNoteSvc := service.NewCreditNoteService(creditNoteRepo, invoiceRepo)

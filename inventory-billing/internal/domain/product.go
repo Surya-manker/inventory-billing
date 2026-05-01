@@ -15,6 +15,7 @@ type Product struct {
 	CategoryID        *uuid.UUID `gorm:"type:varchar(36);index"                     json:"category_id,omitempty"`
 	Category          *Category  `gorm:"foreignKey:CategoryID"                      json:"category,omitempty"`
 	Price             float64    `gorm:"type:decimal(12,2);not null"                json:"price"`
+	CostPrice         float64    `gorm:"type:decimal(12,2);not null;default:0"      json:"cost_price"`
 	Stock             int        `gorm:"not null;default:0"                         json:"stock"`
 	TaxRate           float64    `gorm:"type:decimal(5,2);not null;default:0"       json:"tax_rate"`
 	LowStockThreshold int        `gorm:"not null;default:10"                        json:"low_stock_threshold"`
@@ -32,6 +33,14 @@ func (p *Product) BeforeCreate(tx *gorm.DB) error {
 // IsLowStock returns true when current stock is at or below the threshold.
 func (p *Product) IsLowStock() bool {
 	return p.Stock <= p.LowStockThreshold
+}
+
+// Margin returns the gross margin as a percentage of selling price.
+func (p *Product) Margin() float64 {
+	if p.Price == 0 {
+		return 0
+	}
+	return (p.Price - p.CostPrice) / p.Price * 100
 }
 
 // ProductFilter is shared by repository and service to avoid circular imports.

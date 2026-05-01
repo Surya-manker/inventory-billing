@@ -43,23 +43,26 @@ type InvoiceService interface {
 // ── implementation ────────────────────────────────────────────────────────────
 
 type invoiceService struct {
-	invoiceRepo  repository.InvoiceRepository
-	productRepo  repository.ProductRepository
-	customerRepo repository.CustomerRepository
-	stateCode    string // seller GST state code for intra/inter-state detection
+	invoiceRepo    repository.InvoiceRepository
+	productRepo    repository.ProductRepository
+	customerRepo   repository.CustomerRepository
+	accountingSvc  AccountingService
+	stateCode      string // seller GST state code for intra/inter-state detection
 }
 
 func NewInvoiceService(
 	invoiceRepo repository.InvoiceRepository,
 	productRepo repository.ProductRepository,
 	customerRepo repository.CustomerRepository,
+	accountingSvc AccountingService,
 	sellerStateCode string,
 ) InvoiceService {
 	return &invoiceService{
-		invoiceRepo:  invoiceRepo,
-		productRepo:  productRepo,
-		customerRepo: customerRepo,
-		stateCode:    sellerStateCode,
+		invoiceRepo:   invoiceRepo,
+		productRepo:   productRepo,
+		customerRepo:  customerRepo,
+		accountingSvc: accountingSvc,
+		stateCode:     sellerStateCode,
 	}
 }
 
@@ -115,6 +118,7 @@ func (s *invoiceService) Create(ctx context.Context, input CreateInvoiceInput) (
 			ProductID: product.ID,
 			Quantity:  req.Quantity,
 			UnitPrice: product.Price,
+			CostPrice: product.CostPrice, // snapshot at sale time for COGS tracking
 			SubTotal:  lineSubTotal,
 			TaxRate:   product.TaxRate,
 			TaxAmount: lineTax,
@@ -172,10 +176,20 @@ func (s *invoiceService) Create(ctx context.Context, input CreateInvoiceInput) (
 		DueAt:         input.DueAt,
 	}
 
-	return s.invoiceRepo.CreateTx(ctx, repository.CreateInvoiceTxInput{
+	created, err := s.invoiceRepo.CreateTx(ctx, repository.CreateInvoiceTxInput{
 		Invoice:    invoice,
 		Deductions: deductions,
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Post accounting entry after the invoice transaction commits.
+	// Runs in its own transaction — a failure here is logged by the repository
+	// layer but does not roll back the already-committed invoice.
+	_ = s.accountingSvc.PostInvoice(ctx, created, input.CreatedBy)
+
+	return created, nil
 }
 
 func (s *invoiceService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Invoice, error) {

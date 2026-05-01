@@ -28,12 +28,13 @@ type PaymentService interface {
 }
 
 type paymentService struct {
-	repo        repository.PaymentRepository
-	invoiceRepo repository.InvoiceRepository
+	repo          repository.PaymentRepository
+	invoiceRepo   repository.InvoiceRepository
+	accountingSvc AccountingService
 }
 
-func NewPaymentService(payRepo repository.PaymentRepository, invRepo repository.InvoiceRepository) PaymentService {
-	return &paymentService{repo: payRepo, invoiceRepo: invRepo}
+func NewPaymentService(payRepo repository.PaymentRepository, invRepo repository.InvoiceRepository, accountingSvc AccountingService) PaymentService {
+	return &paymentService{repo: payRepo, invoiceRepo: invRepo, accountingSvc: accountingSvc}
 }
 
 func (s *paymentService) Record(ctx context.Context, in RecordPaymentInput) (*domain.Payment, error) {
@@ -60,7 +61,15 @@ func (s *paymentService) Record(ctx context.Context, in RecordPaymentInput) (*do
 		Notes:       in.Notes,
 		PaidAt:      in.PaidAt,
 	}
-	return s.repo.CreateTx(ctx, p)
+	created, err := s.repo.CreateTx(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+
+	// Post accounting entry after the payment transaction commits.
+	_ = s.accountingSvc.PostPayment(ctx, created)
+
+	return created, nil
 }
 
 func (s *paymentService) ListByInvoice(ctx context.Context, invoiceID uuid.UUID) ([]domain.Payment, *domain.PaymentSummary, error) {

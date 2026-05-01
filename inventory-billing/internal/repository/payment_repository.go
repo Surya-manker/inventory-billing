@@ -30,7 +30,7 @@ func NewPaymentRepository(db *gorm.DB) PaymentRepository {
 
 func (r *paymentRepository) CreateTx(ctx context.Context, payment *domain.Payment) (*domain.Payment, error) {
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Re-fetch invoice inside the transaction with a row lock.
+		// Lock the invoice row for the duration of this transaction.
 		var invoice domain.Invoice
 		if err := tx.Set("gorm:query_option", "FOR UPDATE").
 			First(&invoice, "id = ?", payment.InvoiceID).Error; err != nil {
@@ -43,14 +43,10 @@ func (r *paymentRepository) CreateTx(ctx context.Context, payment *domain.Paymen
 			return domain.ErrInvoiceAlreadyPaid
 		}
 
-		// Sum existing payments inside the transaction for an accurate balance.
-		var already float64
-		tx.Model(&domain.Payment{}).
-			Where("invoice_id = ?", payment.InvoiceID).
-			Select("COALESCE(SUM(amount), 0)").
-			Scan(&already)
-
-		if already+payment.Amount > invoice.TotalPrice+0.01 { // 1-paisa tolerance
+		// Use the invoice's running paid_amount (not a SUM query) — it is updated
+		// atomically below, so concurrent transactions always see the locked value.
+		newPaid := invoice.PaidAmount + payment.Amount
+		if newPaid > invoice.TotalPrice+0.01 { // 1-paisa tolerance
 			return domain.ErrPaymentExceedsBalance
 		}
 
@@ -58,16 +54,20 @@ func (r *paymentRepository) CreateTx(ctx context.Context, payment *domain.Paymen
 			return err
 		}
 
-		// Auto-close the invoice when fully settled.
-		if already+payment.Amount >= invoice.TotalPrice-0.01 {
-			if err := tx.Model(&invoice).Updates(map[string]any{
-				"status":  domain.InvoicePaid,
-				"paid_at": payment.PaidAt,
-			}).Error; err != nil {
-				return err
-			}
+		// Determine new invoice status based on cumulative paid amount.
+		invoiceUpdate := map[string]any{
+			"paid_amount": newPaid,
 		}
-		return nil
+		if newPaid >= invoice.TotalPrice-0.01 {
+			invoiceUpdate["status"] = domain.InvoicePaid
+			invoiceUpdate["paid_at"] = payment.PaidAt
+		} else {
+			invoiceUpdate["status"] = domain.InvoicePartial
+		}
+
+		return tx.Model(&domain.Invoice{}).
+			Where("id = ?", invoice.ID).
+			Updates(invoiceUpdate).Error
 	})
 	if err != nil {
 		return nil, err

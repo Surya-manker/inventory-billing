@@ -8,7 +8,7 @@ import Pagination from '../components/common/Pagination'
 import { formatCurrency } from '../utils/formatters'
 
 const LIMIT = 10
-const EMPTY = { name: '', description: '', sku: '', price: '', stock: '' }
+const EMPTY = { name: '', description: '', sku: '', price: '', cost_price: '', stock: '' }
 
 export default function Products() {
   const { isAdmin } = useAuth()
@@ -56,11 +56,12 @@ export default function Products() {
     setSaving(true)
     try {
       await createProduct({
-        name: form.name,
-        description: form.description || undefined,
-        sku: form.sku,
-        price: parseFloat(form.price),
-        stock: form.stock ? parseInt(form.stock) : 0,
+        name:        form.name,
+        description: form.description  || undefined,
+        sku:         form.sku,
+        price:       parseFloat(form.price),
+        cost_price:  form.cost_price ? parseFloat(form.cost_price) : 0,
+        stock:       form.stock ? parseInt(form.stock) : 0,
       })
       setAddOpen(false); setForm(EMPTY); setOffset(0); load()
     } catch (err) {
@@ -146,6 +147,7 @@ export default function Products() {
                     <th className="table-th">Name</th>
                     <th className="table-th hidden sm:table-cell">SKU</th>
                     <th className="table-th">Price</th>
+                    <th className="table-th hidden sm:table-cell">Cost</th>
                     <th className="table-th">Stock</th>
                     <th className="table-th hidden md:table-cell">Tax</th>
                     {isAdmin && <th className="table-th text-right">Actions</th>}
@@ -167,6 +169,9 @@ export default function Products() {
                       <td className="table-td font-mono text-xs text-gray-500 hidden sm:table-cell">{p.sku}</td>
                       <td className="table-td font-semibold text-gray-800 whitespace-nowrap">
                         {formatCurrency(p.price)}
+                      </td>
+                      <td className="table-td text-gray-500 text-sm hidden sm:table-cell">
+                        {p.cost_price > 0 ? formatCurrency(p.cost_price) : <span className="text-gray-300">—</span>}
                       </td>
                       <td className="table-td">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${p.stock <= (p.low_stock_threshold ?? 5)
@@ -224,9 +229,14 @@ export default function Products() {
                 onChange={(e) => setForm({ ...form, sku: e.target.value })} placeholder="PROD-001" />
             </div>
             <div>
-              <label className="label">Price (₹) *</label>
+              <label className="label">Selling Price (₹) *</label>
               <input className="input" type="number" min="0.01" step="0.01" required value={form.price}
                 onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="0.00" />
+            </div>
+            <div>
+              <label className="label">Cost Price (₹)</label>
+              <input className="input" type="number" min="0" step="0.01" value={form.cost_price}
+                onChange={(e) => setForm({ ...form, cost_price: e.target.value })} placeholder="0.00" />
             </div>
             <div>
               <label className="label">Initial Stock</label>

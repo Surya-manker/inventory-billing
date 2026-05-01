@@ -154,12 +154,20 @@ func (r *invoiceRepository) CreateTx(ctx context.Context, input CreateInvoiceTxI
 
 func (r *invoiceRepository) MarkPaid(ctx context.Context, id uuid.UUID) (*domain.Invoice, error) {
 	now := time.Now().UTC()
-	if err := r.db.WithContext(ctx).Model(&domain.Invoice{}).
-		Where("id = ?", id).
-		Updates(map[string]any{
-			"status":  domain.InvoicePaid,
-			"paid_at": now,
-		}).Error; err != nil {
+	// Also align paid_amount with total_price so OutstandingBalance() is zero
+	// when an admin manually marks an invoice paid (e.g. write-off).
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var inv domain.Invoice
+		if err := tx.First(&inv, "id = ?", id).Error; err != nil {
+			return domain.ErrNotFound
+		}
+		return tx.Model(&domain.Invoice{}).Where("id = ?", id).Updates(map[string]any{
+			"status":      domain.InvoicePaid,
+			"paid_amount": inv.TotalPrice,
+			"paid_at":     now,
+		}).Error
+	})
+	if err != nil {
 		return nil, err
 	}
 	return r.FindByID(ctx, id)
@@ -194,7 +202,7 @@ func (r *invoiceRepository) DeleteTx(ctx context.Context, id uuid.UUID, userID u
 		switch invoice.Status {
 		case domain.InvoicePaid:
 			return domain.ErrCannotDeletePaidInvoice
-		case domain.InvoicePending:
+		case domain.InvoicePending, domain.InvoicePartial, domain.InvoiceOverdue:
 			// Restore stock before removing the record.
 			if err := r.restoreStock(tx, &invoice, userID); err != nil {
 				return err

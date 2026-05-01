@@ -11,12 +11,19 @@ type InvoiceStatus string
 
 const (
 	InvoicePending  InvoiceStatus = "pending"
+	InvoicePartial  InvoiceStatus = "partial"  // at least one payment received, not fully settled
+	InvoiceOverdue  InvoiceStatus = "overdue"  // past due_at with outstanding balance; set by background job
 	InvoicePaid     InvoiceStatus = "paid"
 	InvoiceCanceled InvoiceStatus = "canceled"
 )
 
+// ValidTransitions governs manual status changes via the admin API.
+// InvoicePartial is set automatically by the payment system.
+// InvoiceOverdue is set automatically by the overdue background job.
 var ValidTransitions = map[InvoiceStatus][]InvoiceStatus{
 	InvoicePending:  {InvoicePaid, InvoiceCanceled},
+	InvoicePartial:  {InvoicePaid, InvoiceCanceled},
+	InvoiceOverdue:  {InvoicePaid, InvoiceCanceled},
 	InvoicePaid:     {},
 	InvoiceCanceled: {},
 }
@@ -35,6 +42,7 @@ type Invoice struct {
 	TaxableAmount float64 `gorm:"type:decimal(12,2);not null;default:0" json:"taxable_amount"`
 	TaxAmount     float64 `gorm:"type:decimal(12,2);not null;default:0" json:"tax_amount"`
 	TotalPrice    float64 `gorm:"type:decimal(12,2);not null"           json:"total_price"`
+	PaidAmount    float64 `gorm:"type:decimal(12,2);not null;default:0" json:"paid_amount"`
 
 	IntraState bool    `gorm:"type:tinyint(1);not null;default:1"   json:"intra_state"`
 	CGSTAmount float64 `gorm:"type:decimal(12,2);not null;default:0" json:"cgst_amount"`
@@ -61,6 +69,15 @@ func (inv *Invoice) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+// OutstandingBalance returns the amount still owed on this invoice.
+func (inv *Invoice) OutstandingBalance() float64 {
+	bal := inv.TotalPrice - inv.PaidAmount
+	if bal < 0 {
+		return 0
+	}
+	return bal
+}
+
 type InvoiceItem struct {
 	ID        uuid.UUID `gorm:"type:varchar(36);primaryKey"               json:"id"`
 	InvoiceID uuid.UUID `gorm:"type:varchar(36);not null;index"           json:"invoice_id"`
@@ -69,6 +86,7 @@ type InvoiceItem struct {
 
 	Quantity  int     `gorm:"not null"                               json:"quantity"`
 	UnitPrice float64 `gorm:"type:decimal(12,2);not null"            json:"unit_price"`
+	CostPrice float64 `gorm:"type:decimal(12,2);not null;default:0"  json:"cost_price"` // snapshotted at sale time
 	SubTotal  float64 `gorm:"type:decimal(12,2);not null"            json:"sub_total"`
 	TaxRate   float64 `gorm:"type:decimal(5,2);not null;default:0"   json:"tax_rate"`
 	TaxAmount float64 `gorm:"type:decimal(12,2);not null;default:0"  json:"tax_amount"`

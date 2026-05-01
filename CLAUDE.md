@@ -8,7 +8,7 @@ Two sibling projects share this directory:
 
 | Directory | Stack | Port |
 |---|---|---|
-| `inventory-billing/` | Go 1.22 · Gin · GORM · MySQL · Redis · Asynq | `8080` |
+| `inventory-billing/` | Go 1.24 · Gin · GORM · MySQL · Redis · Asynq | `8080` |
 | `inventory-billing-ui/` | React 18 · Vite · Tailwind CSS · Axios | `5173` |
 
 ---
@@ -16,6 +16,8 @@ Two sibling projects share this directory:
 ## Backend (`inventory-billing/`)
 
 ### Commands
+
+All commands run from inside `inventory-billing/`.
 
 ```bash
 # Run the API server
@@ -117,10 +119,15 @@ internal/
   domain/    Pure structs + domain errors. No DB or HTTP imports.
              errors.go — all sentinel errors (domain.ErrNotFound, etc.)
              job.go    — JobRecord + JobStatus constants
-  handler/   HTTP layer: parse request → call service → write response.
-             job_handler.go  — GET /jobs/:id
+             One file per aggregate: category, credit_note, customer, invoice,
+             invoice_counter, payment, product, stock_log, user, vendor, warehouse.
+  handler/   HTTP layer: parse request → call service → write response. One file per
+             aggregate (auth, category, credit_note, customer, invoice, job, payment,
+             product, report, stock, user, vendor).
              invoice_handler.go — also owns GET /invoices/:id/pdf + PDF job enqueue
-  service/   Business logic. invoice_service.go is the most complex (atomic tx).
+             job_handler.go     — GET /jobs/:id
+  service/   Business logic. One file per aggregate. invoice_service.go is the most
+             complex (atomic tx).
   repository/ GORM queries, one file per aggregate root.
              job_repository.go — CRUD + UpdateJobParams for job tracking
   middleware/ auth.go, rate_limiter.go, logger.go, audit.go
@@ -130,6 +137,8 @@ pkg/
   cache/     redis.go — TokenStore (refresh tokens). generic.go — GetOrSet[T] helper.
   database/  Connect() + AutoMigrate (runs on every startup in dependency order).
   jobs/      runner.go — simple ticker-based scheduler. Three job implementations.
+  jwt/       JWT sign/verify helpers.
+  logger/    Zap logger setup (go.uber.org/zap).
   mailer/    Mailer interface. SMTPMailer (gopkg.in/gomail.v2). NoopMailer (dev).
   pdf/       Generator interface. fpdf implementation (go-pdf/fpdf). GST invoice layout.
   queue/     Asynq wrapper.
@@ -139,7 +148,7 @@ pkg/
              invoice_pdf_handler.go — PDF worker handler (implements asynq.Handler)
              email_handler.go      — email worker handler
   storage/   Storage interface. LocalStorage (filesystem). S3Storage stub.
-  utils/     jwt.go, context.go, response.go, gst.go, math.go, query.go
+  utils/     context.go, response.go, gst.go, math.go, password.go, query.go
 ```
 
 ### Key Conventions
