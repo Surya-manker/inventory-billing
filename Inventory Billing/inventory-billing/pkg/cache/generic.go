@@ -48,6 +48,18 @@ func (c *Cache) Del(ctx context.Context, keys ...string) error {
 	return c.rdb.Del(ctx, keys...).Err()
 }
 
+// DelByPrefix removes all keys that start with prefix. Redis DEL does not
+// expand wildcards, so use SCAN for cache groups like product list pages.
+func (c *Cache) DelByPrefix(ctx context.Context, prefix string) error {
+	iter := c.rdb.Scan(ctx, 0, prefix+"*", 0).Iterator()
+	for iter.Next(ctx) {
+		if err := c.rdb.Del(ctx, iter.Val()).Err(); err != nil {
+			return err
+		}
+	}
+	return iter.Err()
+}
+
 // GetOrSet is the cache-aside helper: it tries the cache first, and if it
 // misses it calls fetch(), stores the result, and returns it.
 func GetOrSet[T any](ctx context.Context, c *Cache, key string, ttl time.Duration, fetch func() (T, error)) (T, error) {

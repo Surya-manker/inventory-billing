@@ -1,9 +1,23 @@
 import api from './axios'
 
-export const getProducts = (params = {}) =>
-  api.get('/products', { params })
+const noCache = () => ({
+  headers: {
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
+  },
+})
 
-export const getProduct = (id) => api.get(`/products/${id}`)
+export const getProducts = (params = {}) =>
+  api.get('/products', {
+    params: { ...params, _: Date.now() },
+    ...noCache(),
+  })
+
+export const getProduct = (id) =>
+  api.get(`/products/${id}`, {
+    params: { _: Date.now() },
+    ...noCache(),
+  })
 
 export const createProduct = (data) => api.post('/products', data)
 

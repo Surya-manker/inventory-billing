@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/yourusername/inventory-billing/internal/domain"
@@ -74,13 +73,14 @@ func productListKey(f domain.ProductFilter, limit, offset int) string {
 }
 
 // invalidateProductCache removes all product list keys.
-// We use a wildcard scan to be thorough — acceptable since mutations are rare.
+// We use a prefix scan to be thorough because product lists are cached per
+// filter and pagination combination.
 func (s *productService) invalidateProductCache(ctx context.Context) {
 	if s.cache == nil {
 		return
 	}
 	// Best-effort; a cache miss on the next read is harmless.
-	_ = s.cache.Del(ctx, "products:list:*")
+	_ = s.cache.DelByPrefix(ctx, "products:list:")
 }
 
 func (s *productService) Create(ctx context.Context, input CreateProductInput) (*domain.Product, error) {
@@ -181,21 +181,7 @@ func (s *productService) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *productService) List(ctx context.Context, filter domain.ProductFilter, limit, offset int) ([]domain.Product, int64, error) {
-	if s.cache == nil {
-		return s.repo.List(ctx, filter, limit, offset)
-	}
-	key := productListKey(filter, limit, offset)
-	result, err := cache.GetOrSet(ctx, s.cache, key, 3*time.Minute, func() (pagedProducts, error) {
-		items, total, err := s.repo.List(ctx, filter, limit, offset)
-		if err != nil {
-			return pagedProducts{}, err
-		}
-		return pagedProducts{Items: items, Total: total}, nil
-	})
-	if err != nil {
-		return nil, 0, err
-	}
-	return result.Items, result.Total, nil
+	return s.repo.List(ctx, filter, limit, offset)
 }
 
 // AdjustStock delegates to the repository's atomic operation and validates

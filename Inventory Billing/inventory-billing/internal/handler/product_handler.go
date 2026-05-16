@@ -20,6 +20,12 @@ func NewProductHandler(svc service.ProductService) *ProductHandler {
 	return &ProductHandler{svc: svc}
 }
 
+func noStore(c *gin.Context) {
+	c.Header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+	c.Header("Pragma", "no-cache")
+	c.Header("Expires", "0")
+}
+
 // Create godoc
 // POST /api/v1/products  (admin)
 func (h *ProductHandler) Create(c *gin.Context) {
@@ -57,6 +63,8 @@ func (h *ProductHandler) Create(c *gin.Context) {
 // GetByID godoc
 // GET /api/v1/products/:id
 func (h *ProductHandler) GetByID(c *gin.Context) {
+	noStore(c)
+
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, "invalid product id")
@@ -149,6 +157,8 @@ func (h *ProductHandler) Delete(c *gin.Context) {
 //	limit       int      — max 100  (default: 20)
 //	offset      int      — (default: 0)
 func (h *ProductHandler) List(c *gin.Context) {
+	noStore(c)
+
 	limit, offset := utils.Pagination(c)
 
 	filter := domain.ProductFilter{
